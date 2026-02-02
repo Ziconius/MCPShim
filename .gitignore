@@ -33,3 +33,5 @@ go.work.sum
 
 app
 mcp_shim_log.txt
+scratch/
+.vscode/

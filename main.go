@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -11,29 +12,16 @@ import (
 	"sync"
 )
 
-type Config struct {
-	ProxyAddr string // Need to check the type for IP/Port.
-	ProxyPort string
-}
-
-func NewConfig() Config {
-	// TODO - Not returning an error as this should just panic if a failed config exists.
-	return Config{}
-}
-
 var CFG Config
 
 func init() {
-	// Create config object
 	CFG = NewConfig()
-
 }
 
 func main() {
-	// Send logging to a sensible location.
-	f, err := os.OpenFile("/tmp/mcp_shim_log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(CFG.LogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		log.Fatalf("error opening file: %v", err)
+		log.Fatal("error creating or opening log file file", "error", err)
 	}
 
 	opts := &slog.HandlerOptions{
@@ -43,20 +31,27 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(f, opts))
 	slog.SetDefault(logger)
 
-	parentIn := make(chan string)  // STDOUT from parent/Our STDIN
-	parentOut := make(chan string) // STDOUT to parent
+	// Output current config for debugging
+	slog.Debug("Current config", "Logfile", CFG.LogFile, "Intercept", CFG.Intercept)
 
-	childIn := make(chan string)  // STDIN to child
-	childOut := make(chan string) // STDOUT from child
+	// Parent channels with with the MCP client stdio interface
+	parentIn := make(chan string) 
+	parentOut := make(chan string)
+
+	// Child channels interface with the MCP Server launched by the shim.
+	childIn := make(chan string)
+	childOut := make(chan string)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go ParentReciever(parentIn)
 	go ParentSender(parentOut)
-
-	// TODO: pull CLI args and recreate the initial MCP args.
-	args := GetMCPServerArgs()
+	args, err := GetMCPServerArgs()
+	if err != nil {
+		slog.Error("No MCP server defined", "error", err)
+		panic("error no MCP server configured via args.")
+	}
 	go ChildProcess(args, childOut, childIn)
 
 	// This is where we'll build out proxy tooling.
@@ -68,20 +63,29 @@ func main() {
 
 		This means we may to have less basic shim format.
 	*/
-	go ParentShim(parentIn, childOut)
-	go ChildShim(childIn, parentOut)
+	if CFG.Intercept.Enabled {
+		go HTTPParentShim(CFG.Intercept.Address, parentIn, childOut)
+		go HTTPChildShim(CFG.Intercept.Address, childIn, parentOut)
+	} else {
+		go ParentShim(parentIn, childOut)
+		go ChildShim(childIn, parentOut)
+	}
+
 	wg.Wait()
 
 }
 
-func GetMCPServerArgs() []string {
+func GetMCPServerArgs() ([]string, error) {
 	argsWithoutProg := os.Args[1:]
 	slog.Debug("MCP Server + args", "cmd", argsWithoutProg)
-	return argsWithoutProg
+	if len(argsWithoutProg) == 0 {
+		return argsWithoutProg, errors.New("no args provided to the process")
+	}
+	return argsWithoutProg, nil
 }
 
 func ParentReciever(PI chan string) {
-	slog.Info("Starting parent reciever.")
+	slog.Debug("Starting parent reciever.")
 	reader := bufio.NewReader(os.Stdin)
 	for {
 		text, err := reader.ReadString('\n')
@@ -91,7 +95,7 @@ func ParentReciever(PI chan string) {
 			}
 		} else {
 			PI <- text
-			slog.Debug("Message recieved from parent", "msg", text)
+			slog.Debug("Message recieved from parent", "request", text)
 		}
 	}
 }
@@ -99,9 +103,9 @@ func ParentReciever(PI chan string) {
 func ParentSender(PO chan string) {
 	slog.Info("Starting Parent Sender")
 	for {
-		msg := <-PO
-		slog.Debug("Sending to parent via our stdout", "msg", msg)
-		fmt.Printf("%v", msg)
+		data := <-PO
+		slog.Debug("Sending to parent via our stdout", "response", data)
+		fmt.Printf("%v", data)
 	}
 }
 
@@ -112,12 +116,18 @@ func ChildProcess(args []string, CO, CI chan string) {
 
 		This will need the ChildOut (Messages to be send OUT to the subprocess)
 		and it will need to take child IN (messages recieved from the subprocess)
-
 	*/
 
 	// cmd := exec.Command("npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp/mcp")
-	// TODO: implement & test args.
-	cmd := exec.Command("npx", "@playwright/mcp@latest")
+	// cmd := exec.Command("npx", "@playwright/mcp@latest")
+
+	cmd := &exec.Cmd{}
+	if len(args) == 1 {
+		cmd = exec.Command(args[0])
+	} else {
+		slog.Debug("executed command", "command", args[0], "args", args[1:])
+		cmd = exec.Command(args[0], args[1:]...)
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		// log.Fatal(err)
@@ -130,7 +140,6 @@ func ChildProcess(args []string, CO, CI chan string) {
 		slog.Error("StdoutPipe failed", "error", err)
 	}
 
-	slog.Debug("About to enter sub process loop.")
 	err = cmd.Start()
 	if err != nil {
 		slog.Error("failed to exec command", "error", err)
@@ -138,7 +147,6 @@ func ChildProcess(args []string, CO, CI chan string) {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
-	// Child sender (or Parent Out)
 	go ChildSender(CO, stdin)
 	go ChildReciever(CI, out)
 	wg.Wait()
@@ -146,24 +154,19 @@ func ChildProcess(args []string, CO, CI chan string) {
 
 func ChildReciever(CI chan string, stdout io.ReadCloser) {
 	slog.Debug("Starting child reciever")
-	// FUCK KNOWS
-
 	reader := bufio.NewReader(stdout)
 	reader.Size()
 	for {
 
 		line, err := reader.ReadString('\n')
-		// slog.Debug("we've got a line", "msg", line)
 		if len(line) != 0 {
-			slog.Debug("Out line", "msg", line)
+			slog.Debug("Recieved message from MCP Server", "response", line)
 			CI <- line
 		}
 		for err == nil {
-			// fmt.Println(line)
-			// slog.Error("CR: err== nil")
 			line, err = reader.ReadString('\n')
 			if len(line) != 0 {
-				slog.Debug("Out line", "msg", line)
+				slog.Debug("Recieved message from MCP Server", "response", line)
 				CI <- line
 			}
 		}
@@ -171,32 +174,15 @@ func ChildReciever(CI chan string, stdout io.ReadCloser) {
 	}
 }
 
-// Takens PO and send them to child process
+// Takens PI and send them to child process
 func ChildSender(CO chan string, stdin io.WriteCloser) {
-	slog.Debug("Starting child sender.")
+	slog.Debug("Starting child sender")
 	for {
-		tString := <-CO
-		slog.Debug("tString", "msg", tString)
-		_, err := stdin.Write([]byte(tString))
-		// _, err := io.WriteString(stdin, tString)
+		req := <-CO
+		slog.Debug("Sending request to MCP Server", "request", req)
+		_, err := stdin.Write([]byte(req))
 		if err != nil {
 			slog.Error("Failed to with message to child process", "error", err)
 		}
-	}
-}
-
-func ParentShim(PI, CO chan string) {
-	for {
-		v := <-PI
-		slog.Debug("We're got a parent shim", "shim", v)
-		CO <- v
-	}
-}
-
-func ChildShim(CI, PO chan string) {
-	for {
-		v := <-CI
-		slog.Debug("We're got a child shim", "shim", v)
-		PO <- v
 	}
 }
