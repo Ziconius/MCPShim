@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 var CFG Config
@@ -35,7 +36,7 @@ func main() {
 	slog.Debug("Current config", "Logfile", CFG.LogFile, "Intercept", CFG.Intercept)
 
 	// Parent channels with with the MCP client stdio interface
-	parentIn := make(chan string) 
+	parentIn := make(chan string)
 	parentOut := make(chan string)
 
 	// Child channels interface with the MCP Server launched by the shim.
@@ -63,16 +64,30 @@ func main() {
 
 		This means we may to have less basic shim format.
 	*/
+	time.Sleep(1 * time.Second)
+
+	parentResponses := make(map[string]string)
+	childResponses := make(map[string]string)
 	if CFG.Intercept.Enabled {
-		go HTTPParentShim(CFG.Intercept.Address, parentIn, childOut)
-		go HTTPChildShim(CFG.Intercept.Address, childIn, parentOut)
+		go HTTPParentShim(CFG.Intercept.Address, parentIn, childOut, parentResponses, childResponses)
+		go HTTPChildShim(CFG.Intercept.Address, childIn, parentOut, childResponses, parentResponses)
 	} else {
 		go ParentShim(parentIn, childOut)
 		go ChildShim(childIn, parentOut)
 	}
 
+	go XferDebugger(parentResponses, childResponses)
+
 	wg.Wait()
 
+}
+
+func XferDebugger(p, c map[string]string){
+	for {
+		slog.Debug("parent map channel", "lenght", len(p))
+		slog.Debug("child map channel", "lenght", len(c))
+		time.Sleep(5* time.Second)
+	}
 }
 
 func GetMCPServerArgs() ([]string, error) {
@@ -179,7 +194,7 @@ func ChildSender(CO chan string, stdin io.WriteCloser) {
 	slog.Debug("Starting child sender")
 	for {
 		req := <-CO
-		slog.Debug("Sending request to MCP Server", "request", req)
+		slog.Debug("Writing stdio msg to MCP Server", "request", req)
 		_, err := stdin.Write([]byte(req))
 		if err != nil {
 			slog.Error("Failed to with message to child process", "error", err)

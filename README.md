@@ -61,3 +61,4 @@ TODO:
  - [ ] Clean up waitgroup issues.
  - [ ] HTTP interface for fuzzing
  - [ ] Implement golangci-lint
+ - [ ] Support JSON-RPC batch request/response
