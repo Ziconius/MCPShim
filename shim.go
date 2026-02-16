@@ -28,9 +28,9 @@ import (
 // 	}
 // }
 
-func HTTPParentShim(proxyAddr string, PI, CO chan string, out, in map[string]string) {
+func HTTPParentShim(proxyAddr string, PI, CO, PO chan string, out, in map[string]string) {
 	serverPort := "15001"
-	serv := NewHttpIntercept(serverPort, proxyAddr, CO, out, in)
+	serv := NewHttpIntercept(serverPort, proxyAddr, CO, PO, out, in)
 
 	go serv.StartServer()
 	slog.Debug("HTTP Parent shim enabled")
@@ -43,9 +43,9 @@ func HTTPParentShim(proxyAddr string, PI, CO chan string, out, in map[string]str
 	}
 }
 
-func HTTPChildShim(proxyAddr string, CI, PO chan string, out, in map[string]string) {
+func HTTPChildShim(proxyAddr string, CI, PO, CO chan string, out, in map[string]string) {
 	serverPort := "15002"
-	serv := NewHttpIntercept(serverPort, proxyAddr, PO, out, in)
+	serv := NewHttpIntercept(serverPort, proxyAddr, PO, CO, out, in)
 
 	go serv.StartServer()
 	slog.Debug("HTTP Child shim enabled")
@@ -104,38 +104,26 @@ func IsResponse(raw string) bool {
 	return false
 }
 
+// TODO: Remove slow Sprintf usage.
 func ExtractID(raw string) (string, error) {
 	var msg map[string]any
 	json.Unmarshal([]byte(raw), &msg)
-	// _, ok := msg["id"]
-	// if !ok {
-	// 	return "", errors.New("no ID found in message. One was expected.")
-	// }
-
-	// fmt.Printf("V: %#v\n", msg)
-
-	// id could be int or string
-	v, ok := msg["id"].(string)
-	fmt.Printf("Reflect: %v\n", reflect.TypeOf(msg["id"]))
-
-	if reflect.TypeOf(msg["id"]) == reflect.TypeOf("") {
-		fmt.Printf("We have a string")
-	}
-	if reflect.TypeOf(msg["id"]).Kind() == reflect.Float64 {
-		fmt.Printf("We have a string")
-	}		
-	
+	id, ok := msg["id"]
 	if !ok {
-		v, ok := msg["id"].(int)
-		fmt.Printf("Int: %#v: OK: %v\n", v, ok)
-		if !ok {
-			return "", errors.New("ID was not int or string. Error in JSON-RPC message")
-		}
-		return strconv.Itoa(v), nil
+		return "", errors.New("no ID found in message. One was expected.")
 	}
 
-	return v, nil
-
+	switch reflect.TypeOf(msg["id"]).Kind() {
+	case reflect.String:
+		return id.(string), nil
+	case reflect.Float64:
+		return fmt.Sprintf("%v", id.(float64)), nil
+	case reflect.Int:
+		return strconv.Itoa(id.(int)), nil
+	default:
+		err := fmt.Sprintf("unmanaged type used in ID field: %v\n", reflect.TypeOf(msg["id"]).Kind())
+		return "", errors.New(err)
+	}
 }
 
 // func NewJSONRPCMessage(raw string) JSONRPCMessage {

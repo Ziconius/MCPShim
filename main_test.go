@@ -32,12 +32,13 @@ func TestIsReponse(t *testing.T) {
 func TestExtractID(t *testing.T) {
 	tv := `{"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{}},"serverInfo":{"name":"Playwright","version":"0.0.64"}},"jsonrpc":"2.0","id":0}`
 	o, err := ExtractID(tv)
+	t.Logf("[%v]", o)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
+		t.Error("Error: ", err)
 		t.Fail()
 	}
 	if o != "0" {
+		t.Error("Value not matched: ", err)
 		t.Fail()
 	}
-
 }

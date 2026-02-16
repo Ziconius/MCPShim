@@ -69,8 +69,8 @@ func main() {
 	parentResponses := make(map[string]string)
 	childResponses := make(map[string]string)
 	if CFG.Intercept.Enabled {
-		go HTTPParentShim(CFG.Intercept.Address, parentIn, childOut, parentResponses, childResponses)
-		go HTTPChildShim(CFG.Intercept.Address, childIn, parentOut, childResponses, parentResponses)
+		go HTTPParentShim(CFG.Intercept.Address, parentIn, childOut, parentOut, parentResponses, childResponses)
+		go HTTPChildShim(CFG.Intercept.Address, childIn, parentOut, childOut ,childResponses, parentResponses)
 	} else {
 		go ParentShim(parentIn, childOut)
 		go ChildShim(childIn, parentOut)
