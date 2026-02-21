@@ -76,18 +76,8 @@ func main() {
 		go ChildShim(childIn, parentOut)
 	}
 
-	go XferDebugger(parentResponses, childResponses)
-
 	wg.Wait()
 
-}
-
-func XferDebugger(p, c map[string]string){
-	for {
-		slog.Debug("parent map channel", "lenght", len(p))
-		slog.Debug("child map channel", "lenght", len(c))
-		time.Sleep(5* time.Second)
-	}
 }
 
 func GetMCPServerArgs() ([]string, error) {
@@ -125,16 +115,6 @@ func ParentSender(PO chan string) {
 }
 
 func ChildProcess(args []string, CO, CI chan string) {
-
-	/*
-		This function will take the args and start the process.
-
-		This will need the ChildOut (Messages to be send OUT to the subprocess)
-		and it will need to take child IN (messages recieved from the subprocess)
-	*/
-
-	// cmd := exec.Command("npx", "-y", "@modelcontextprotocol/server-filesystem", "/tmp/mcp")
-	// cmd := exec.Command("npx", "@playwright/mcp@latest")
 
 	cmd := &exec.Cmd{}
 	if len(args) == 1 {

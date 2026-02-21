@@ -14,7 +14,7 @@ func NewHttpIntercept(srvport, proxyAddr string, CO, PO chan string, outbound, i
 		ServerPort:       srvport,
 		ProxyAddr:        proxyAddr,
 		Target:           CO,
-		Origin: PO,
+		Origin:           PO,
 		OutboundResponse: outbound,
 		InboundResponse:  inbound,
 	}
@@ -25,9 +25,7 @@ type HTTPIntercept struct {
 	ProxyAddr  string
 	Target     chan string
 	Origin     chan string
-	// Old
-	// Response *map[string]string
-	// New
+
 	OutboundResponse map[string]string
 	InboundResponse  map[string]string
 }
@@ -53,12 +51,6 @@ func (h *HTTPIntercept) HttpRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO:
-	// Loop inbound messages until we hit.
-	// extract ID
-
-	// Loop until we hit the response from the inbound.
-
 	slog.Debug("recieved request message")
 	h.Target <- string(data)
 
@@ -67,6 +59,7 @@ func (h *HTTPIntercept) HttpRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(500)
 		return
 	}
+
 	for {
 		resp, ok := h.InboundResponse[id]
 		if ok {
@@ -81,7 +74,6 @@ func (h *HTTPIntercept) HttpRequest(w http.ResponseWriter, r *http.Request) {
 
 			return
 		}
-
 	}
 }
 

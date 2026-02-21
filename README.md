@@ -53,7 +53,7 @@ TODO:
  - [x] Create shim config file
  - [x] Pass through MCP server `args` to launch the target MCP
  - [x] Create webproxy functionality
-    - [ ] Merge request response into single HTTP request not seperated
+    - [x] Merge request response into single HTTP request not seperated
  - [ ] Create docs on usage
  - [ ] Update logging
     - [ ] Implement more config fiel locations
@@ -61,4 +61,7 @@ TODO:
  - [ ] Clean up waitgroup issues.
  - [ ] HTTP interface for fuzzing
  - [ ] Implement golangci-lint
- - [ ] Support JSON-RPC batch request/response
+ - [x] Support JSON-RPC batch request/response
+ - [ ] Improve config file
+    - [ ] Defaults for no file
+    - [ ] Expand http config.

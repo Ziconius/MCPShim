@@ -9,25 +9,6 @@ import (
 	"strconv"
 )
 
-// Legacy shim
-// func _HTTPParentShim(proxyAddr string, PI, CO chan string, responses *map[string]string) {
-// 	serverPort := "15001"
-// 	go startServer(serverPort, CO, responses)
-// 	slog.Debug("HTTP Parent shim enabled")
-// 	for {
-// 		v := <-PI
-// 		slog.Info("Message to MCP Server", "request", v)
-
-// 		// Post Request
-
-// 		if IsNotification(v) {
-// 			SendNotification(serverPort, proxyAddr, v)
-// 		} else {
-// 			SendRequest(serverPort, proxyAddr, v, responses)
-// 		}
-// 	}
-// }
-
 func HTTPParentShim(proxyAddr string, PI, CO, PO chan string, out, in map[string]string) {
 	serverPort := "15001"
 	serv := NewHttpIntercept(serverPort, proxyAddr, CO, PO, out, in)
@@ -125,51 +106,3 @@ func ExtractID(raw string) (string, error) {
 		return "", errors.New(err)
 	}
 }
-
-// func NewJSONRPCMessage(raw string) JSONRPCMessage {
-// 	n := JSONRPCMessage{
-// 		Message: raw,
-// 	}
-// 	n.parse()
-// 	return n
-// }
-
-// // TODO: Cleanup
-// type JSONRPCMessage struct {
-// 	Id           string
-// 	Message      string
-// 	Notification bool
-// 	Response     bool
-// }
-
-// func (j *JSONRPCMessage) parse() {
-// 	// TODO: Clean up type asserions
-// 	var msg map[string]any
-// 	json.Unmarshal([]byte(j.Message), &msg)
-// 	s, ok := msg["id"]
-// 	if !ok {
-// 		j.Notification = true
-// 		// No ID to parse so we return.
-// 		return
-// 	}
-// 	if a, ok := s.(string); ok {
-// 		j.Id = a
-// 	}
-// 	if b, ok := s.(int); ok {
-// 		j.Id = strconv.Itoa(b)
-// 	}
-// 	j.Response = IsResponse(msg)
-// 	j.Notification = false
-// }
-
-// func IsResponse(msg map[string]any) bool {
-// 	_, ok := msg["result"]
-// 	if !ok {
-// 		return true
-// 	}
-// 	_, ok = msg["error"]
-// 	if !ok {
-// 		return true
-// 	}
-// 	return false
-// }
